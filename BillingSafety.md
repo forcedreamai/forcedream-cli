@@ -1,8 +1,8 @@
 # Billing Safety: Smithery and SerpAPI integration
 
-**Status: not yet implemented. Read this before wiring either source in.**
+**Status: implemented (Model B). This document is now a record of the decision, not an open question.**
 
-## The real problem
+## The real problem, and the decision made
 
 The original spec asked for a client-side daily quota counter inside the CLI binary --
 e.g., "stop calling SerpAPI after 50 calls/day" -- enforced in the distributed binary
@@ -10,7 +10,7 @@ itself.
 
 This does not actually protect a shared API key. Concretely:
 
-- The CLI is distributed publicly (Homebrew, direct download, static binaries for three
+- The CLI is distributed publicly (Homebrew, direct download, static binaries for five
   platforms). Anyone can download and run it.
 - A local quota counter (a state file on disk, e.g. `~/.forcedream/quota.json`) is reset to
   zero by deleting that file, or by running the binary in a fresh environment/container.
@@ -18,44 +18,29 @@ This does not actually protect a shared API key. Concretely:
   is no way for client-side code to know how many calls *anyone else* has already made
   today against the same shared key.
 
-If a single Smithery/SerpAPI API key (paid for by ForceDream, e.g. one already added to
-Vercel) is the key this CLI actually uses, a client-side cap provides **no real protection**
-against runaway billing across many users -- only against one honest user's own accidental
-overuse on their own machine.
+**Model B (shared, ForceDream-paid key, server-side enforcement) was chosen.** The CLI does
+not call Smithery or SerpAPI directly at all -- it calls two real ForceDream backend
+proxies (`/v1/search/smithery-proxy`, `/v1/search/web-proxy`) that hold the real keys
+server-side only (Vercel env vars, never sent to any client) and enforce a real, global
+quota in Redis (daily for Smithery, monthly for SerpAPI, matching each provider's real
+plan). This is the only design that actually protects a shared key: the counter lives in
+one place that can't be reset by deleting local state.
 
-## Two coherent designs -- pick one before implementing
+## Access control (added after the initial proxy build)
 
-### A. Bring-your-own-key (BYOK)
+Both proxies are additionally gated behind a real ForceDream account: a valid `sk_fd_...`
+key (via `FD_ACCOUNT_KEY` -- a different credential from `FD_LIVE_KEY`, which is used for
+agent invocation), a positive account balance, and a `paid-search` entitlement flag
+(currently defaulted to enabled for all real accounts, since no subscription-tier system
+exists yet to differentiate who should/shouldn't have it -- the field is real and checkable
+for when that system exists). The CLI detects and reports three specific rejection reasons
+(`auth_required`, `insufficient_funds`, `feature_not_enabled`) rather than a generic
+failure.
 
-Each end user sets their own `SMITHERY_API_KEY` / `SERPAPI_API_KEY`, using their own
-account, billed to them. In this model:
+**Known, deliberate gap:** this checks that balance is positive but does not deduct
+anything per search. A user with any positive balance passes indefinitely; nothing meters
+search usage into real, ongoing revenue. Flagged directly to the person who requested this
+rather than silently decided either way -- whether metering should be added is a separate
+design question about whether this feature should fund a real SerpAPI/Smithery plan
+upgrade, not something resolved by this document.
 
-- A local, per-machine quota tracker is a genuine, useful *courtesy* feature -- it stops one
-  user from blowing through their own daily budget by accident.
-- This matches how essentially every CLI wrapping a paid third-party API works (`aws`,
-  `gh`, etc.) and is the natural reading of "read from environment variables, never bake
-  into the binary."
-- **This is what the current code (`internal/discovery`) is structured for.** No further
-  architectural work needed -- just wire in the Smithery/SerpAPI clients and the local quota
-  tracker as originally specced.
-
-### B. Shared, ForceDream-paid key
-
-If the intent is for the CLI to make these paid calls against ForceDream's own account,
-regardless of who's running it, the only design that actually protects that spend is
-**server-side enforcement**:
-
-- The CLI does not call Smithery/SerpAPI directly at all.
-- Instead, it calls a real, new ForceDream backend endpoint (e.g. `/v1/search/web-proxy`,
-  `/v1/search/smithery-proxy`) that holds the real keys server-side only (Vercel env vars,
-  never sent to any client) and enforces the real, global daily quota in Redis -- the same
-  pattern every other billing/quota mechanism in ForceDream already uses.
-- This requires new backend work (two new proxy endpoints, quota tracking keys in Redis)
-  before the CLI side can be finished.
-
-## Do not build a client-side-only "hard cap" for a shared key
-
-Doing so would look like a safety feature while providing none of the protection the
-original request asked for ("we cannot be scammed out of freemium"). If B is the intent,
-say so and the backend work gets scoped properly; if A is the intent, this is already ready
-to finish.

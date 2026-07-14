@@ -44,8 +44,8 @@ Usage:
 
 Environment:
   FD_LIVE_KEY       Required for invoke (a real fd_live_... billing key)
-  SMITHERY_API_KEY  Optional -- enables Smithery search if set
-  SERPAPI_API_KEY   Optional -- enables open-web search if set
+  FD_ACCOUNT_KEY    Required for Smithery/open-web search (a real sk_fd_... account key,
+                    with a positive balance) -- a different credential from FD_LIVE_KEY
   GITHUB_TOKEN      Optional -- raises GitHub search's rate limit if set`)
 }
 
@@ -86,8 +86,39 @@ func cmdSearch(ctx context.Context, args []string) {
 		resultsCh <- sourceResult{"GitHub", r, err}
 	}()
 
-	// Paid sources (Smithery, SerpAPI): built separately, gated on the billing-safety
-	// architecture question -- see BillingSafety.md. Not wired in yet.
+	// Paid sources: gated behind a real ForceDream account, balance, and entitlement --
+	// the CLI never touches Smithery/SerpAPI directly, only the real backend proxies,
+	// which hold the real keys server-side. Run in parallel with each other (each is a
+	// single call, not multiple concurrent calls to the same source, so this doesn't
+	// violate the "serialize paid calls" intent -- that was about not hammering one
+	// source with concurrent requests, not about ordering different sources).
+	type paidResult struct {
+		name    string
+		results []discovery.Result
+		status  discovery.PaidSourceStatus
+		err     error
+	}
+	paidCh := make(chan paidResult, 2)
+	var paidWg sync.WaitGroup
+
+	paidWg.Add(1)
+	go func() {
+		defer paidWg.Done()
+		r, status, err := discovery.SearchSmithery(ctx, query)
+		paidCh <- paidResult{"Smithery", r, status, err}
+	}()
+
+	paidWg.Add(1)
+	go func() {
+		defer paidWg.Done()
+		r, status, err := discovery.SearchWeb(ctx, query)
+		paidCh <- paidResult{"Web search", r, status, err}
+	}()
+
+	go func() {
+		paidWg.Wait()
+		close(paidCh)
+	}()
 
 	go func() {
 		wg.Wait()
@@ -105,14 +136,41 @@ func cmdSearch(ctx context.Context, args []string) {
 		all = append(all, r.results...)
 	}
 
+	for r := range paidCh {
+		if r.err != nil {
+			sourceStatus = append(sourceStatus, fmt.Sprintf("%s: unavailable (%v)", r.name, r.err))
+			continue
+		}
+		if !r.status.Available {
+			// Real, specific reasons from the backend gate -- not a generic failure.
+			// Detected here so the person knows exactly what to do next, matching the
+			// three states the backend can return: auth_required (no FD_ACCOUNT_KEY, or
+			// an invalid one), insufficient_funds (real account, but balance <= 0), and
+			// feature_not_enabled (real account, but the paid-search entitlement is off).
+			switch r.status.Reason {
+			case "auth_required":
+				sourceStatus = append(sourceStatus, fmt.Sprintf("%s: sign-in required -- %s", r.name, r.status.Message))
+			case "insufficient_funds":
+				sourceStatus = append(sourceStatus, fmt.Sprintf("%s: insufficient balance -- %s", r.name, r.status.Message))
+			case "feature_not_enabled":
+				sourceStatus = append(sourceStatus, fmt.Sprintf("%s: feature not enabled on this account -- %s", r.name, r.status.Message))
+			case "quota_exceeded":
+				sourceStatus = append(sourceStatus, fmt.Sprintf("%s: quota exceeded -- %s", r.name, r.status.Message))
+			default:
+				sourceStatus = append(sourceStatus, fmt.Sprintf("%s: unavailable -- %s", r.name, r.status.Message))
+			}
+			continue
+		}
+		sourceStatus = append(sourceStatus, fmt.Sprintf("%s: %d results", r.name, len(r.results)))
+		all = append(all, r.results...)
+	}
+
 	merged := discovery.MergeAndRank(all)
 
 	fmt.Fprintln(os.Stderr, "Sources queried:")
 	for _, s := range sourceStatus {
 		fmt.Fprintln(os.Stderr, "  "+s)
 	}
-	fmt.Fprintln(os.Stderr, "  Smithery: not configured (SMITHERY_API_KEY not set)")
-	fmt.Fprintln(os.Stderr, "  Web search: not configured (SERPAPI_API_KEY not set)")
 	fmt.Fprintln(os.Stderr)
 
 	out, _ := json.MarshalIndent(merged, "", "  ")

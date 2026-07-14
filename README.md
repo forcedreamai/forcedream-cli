@@ -16,14 +16,15 @@ Searches across real, currently-available sources and merges/ranks/dedupes the r
 - **GitHub** -- real repository search (stars, topics, last-updated), via GitHub's own Search
   API
 
-Two additional sources -- **Smithery** and **open-web search (SerpAPI)** -- are wired into
-the code path but not yet enabled by default. Both are real, paid third-party APIs, and
-before shipping them live, a real billing-safety architecture question needs answering: a
-client-side quota counter cannot protect a single, shared API key across every copy of a
-publicly-distributed binary (it's trivially reset by deleting local state, and doesn't
-aggregate across different users' machines at all). See `BillingSafety.md` for the two
-possible designs and why the choice matters before any code gets written for these two
-sources.
+Two additional sources -- **Smithery** and **open-web search (SerpAPI, via Google search
+results)** -- are gated behind a real ForceDream account (`FD_ACCOUNT_KEY`, a real `sk_fd_...`
+key -- a different credential from `FD_LIVE_KEY`), a positive account balance, and a
+paid-search entitlement. The CLI never touches Smithery or SerpAPI directly; it calls real
+ForceDream backend proxies that hold the real keys server-side only, enforcing a real,
+global quota (not a client-side one, which cannot protect a shared key -- see
+`BillingSafety.md` for why). Without `FD_ACCOUNT_KEY` set, the command still works using the
+three free sources above, clearly labeling these two as requiring sign-in rather than
+silently omitting them.
 
 **Honesty about metrics:** rankings use only real, confirmed signals -- GitHub stars and
 Smithery's real `useCount` field, where present. There is no "weekly velocity" metric here;
@@ -54,12 +55,14 @@ go build -o forcedream .
 | Variable | Required for | Notes |
 |---|---|---|
 | `FD_LIVE_KEY` | `invoke` | Real billing key, spends your balance |
+| `FD_ACCOUNT_KEY` | Smithery/web search | Real `sk_fd_...` account key with a positive balance -- a different credential from `FD_LIVE_KEY` |
 | `GITHUB_TOKEN` | optional | Raises GitHub search's rate limit (not a paid API) |
-| `SMITHERY_API_KEY` | optional | Not yet wired in -- see Billing Safety above |
-| `SERPAPI_API_KEY` | optional | Not yet wired in -- see Billing Safety above |
 
-No API key is ever baked into the binary. Missing keys mean that specific source is skipped,
-clearly labeled in the output -- the rest of the command still works.
+No API key is ever baked into the binary. The real Smithery/SerpAPI keys live only on the
+ForceDream backend, never in this CLI or its distributed binaries. Missing or rejected
+credentials mean that specific source is skipped, clearly labeled with the real reason
+(sign-in required, insufficient balance, feature not enabled) -- the rest of the command
+still works.
 
 ## Links
 
