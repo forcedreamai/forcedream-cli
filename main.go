@@ -43,9 +43,9 @@ Usage:
   forcedream verify <task_id>            Verify a real Ed25519 proof, entirely client-side
 
 Environment:
-  FD_LIVE_KEY       Required for invoke (a real fd_live_... billing key)
-  FD_ACCOUNT_KEY    Required for Smithery/open-web search (a real sk_fd_... account key,
-                    with a positive balance) -- a different credential from FD_LIVE_KEY
+  FD_LIVE_KEY       Required for invoke, and for Smithery/open-web search (a real
+                    fd_live_... billing key with a positive balance) -- the same key
+                    covers all three
   GITHUB_TOKEN      Optional -- raises GitHub search's rate limit if set`)
 }
 
@@ -144,7 +144,7 @@ func cmdSearch(ctx context.Context, args []string) {
 		if !r.status.Available {
 			// Real, specific reasons from the backend gate -- not a generic failure.
 			// Detected here so the person knows exactly what to do next, matching the
-			// three states the backend can return: auth_required (no FD_ACCOUNT_KEY, or
+			// three states the backend can return: auth_required (no FD_LIVE_KEY, or
 			// an invalid one), insufficient_funds (real account, but balance <= 0), and
 			// feature_not_enabled (real account, but the paid-search entitlement is off).
 			switch r.status.Reason {

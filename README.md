@@ -17,14 +17,13 @@ Searches across real, currently-available sources and merges/ranks/dedupes the r
   API
 
 Two additional sources -- **Smithery** and **open-web search (SerpAPI, via Google search
-results)** -- are gated behind a real ForceDream account (`FD_ACCOUNT_KEY`, a real `sk_fd_...`
-key -- a different credential from `FD_LIVE_KEY`), a positive account balance, and a
-paid-search entitlement. The CLI never touches Smithery or SerpAPI directly; it calls real
-ForceDream backend proxies that hold the real keys server-side only, enforcing a real,
-global quota (not a client-side one, which cannot protect a shared key -- see
-`BillingSafety.md` for why). Without `FD_ACCOUNT_KEY` set, the command still works using the
-three free sources above, clearly labeling these two as requiring sign-in rather than
-silently omitting them.
+results)** -- are gated behind a real ForceDream billing key (`FD_LIVE_KEY`, the same
+`fd_live_...` credential already used for `invoke`), a positive prepaid balance, and a
+paid-search entitlement. Each successful search charges the account, atomically and only
+after a real result comes back -- see `BillingSafety.md` for the full mechanism, including
+why a client-side quota alone can never protect a shared key. Without `FD_LIVE_KEY` set (or
+without a sufficient balance), the command still works using the three free sources above,
+clearly labeling these two as requiring sign-in rather than silently omitting them.
 
 **Honesty about metrics:** rankings use only real, confirmed signals -- GitHub stars and
 Smithery's real `useCount` field, where present. There is no "weekly velocity" metric here;
@@ -54,8 +53,7 @@ go build -o forcedream .
 
 | Variable | Required for | Notes |
 |---|---|---|
-| `FD_LIVE_KEY` | `invoke` | Real billing key, spends your balance |
-| `FD_ACCOUNT_KEY` | Smithery/web search | Real `sk_fd_...` account key with a positive balance -- a different credential from `FD_LIVE_KEY` |
+| `FD_LIVE_KEY` | `invoke`, Smithery/web search | Real `fd_live_...` billing key; needs a positive balance for the two paid search sources, which also charge it per search |
 | `GITHUB_TOKEN` | optional | Raises GitHub search's rate limit (not a paid API) |
 
 No API key is ever baked into the binary. The real Smithery/SerpAPI keys live only on the

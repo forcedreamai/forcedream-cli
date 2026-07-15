@@ -20,12 +20,12 @@ type webProxyResponse struct {
 }
 
 // SearchWeb calls the real ForceDream backend proxy for open-web search (SerpAPI, real key
-// server-side only). Same gating -- real ForceDream account, balance, entitlement -- as
-// Smithery, using the same FD_ACCOUNT_KEY.
+// server-side only). Same gating -- real ForceDream fd_live_ account, balance,
+// entitlement -- as Smithery, using the same FD_LIVE_KEY.
 func SearchWeb(ctx context.Context, query string) ([]Result, PaidSourceStatus, error) {
-	key := fdAccountKey()
+	key := fdLiveKeyForSearch()
 	if key == "" {
-		return nil, PaidSourceStatus{Available: false, Reason: "auth_required", Message: "Set FD_ACCOUNT_KEY (a real sk_fd_... ForceDream account key) to use open-web search."}, nil
+		return nil, PaidSourceStatus{Available: false, Reason: "auth_required", Message: "Set FD_LIVE_KEY (a real fd_live_... ForceDream billing key) to use open-web search."}, nil
 	}
 
 	apiURL := "https://api.forcedream.ai/v1/search/web-proxy?q=" + url.QueryEscape(query)

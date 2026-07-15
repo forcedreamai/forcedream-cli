@@ -28,19 +28,45 @@ one place that can't be reset by deleting local state.
 
 ## Access control (added after the initial proxy build)
 
-Both proxies are additionally gated behind a real ForceDream account: a valid `sk_fd_...`
-key (via `FD_ACCOUNT_KEY` -- a different credential from `FD_LIVE_KEY`, which is used for
-agent invocation), a positive account balance, and a `paid-search` entitlement flag
+Both proxies are additionally gated behind a real ForceDream billing key: a valid
+`fd_live_...` key (via `FD_LIVE_KEY` -- the same credential the CLI already uses for
+`invoke`; an earlier version of this used a separate `FD_ACCOUNT_KEY`/`sk_fd_...` pair,
+which turned out to check the wrong ledger entirely -- see the note below), a positive
+prepaid balance (the real, established fd_live_ billing substrate, `liveCharge`/
+`liveBalance`, the same one agent invocation already uses -- not the separate earnings
+ledger), and a `paid-search` entitlement flag
 (currently defaulted to enabled for all real accounts, since no subscription-tier system
 exists yet to differentiate who should/shouldn't have it -- the field is real and checkable
 for when that system exists). The CLI detects and reports three specific rejection reasons
 (`auth_required`, `insufficient_funds`, `feature_not_enabled`) rather than a generic
 failure.
 
-**Known, deliberate gap:** this checks that balance is positive but does not deduct
-anything per search. A user with any positive balance passes indefinitely; nothing meters
-search usage into real, ongoing revenue. Flagged directly to the person who requested this
-rather than silently decided either way -- whether metering should be added is a separate
-design question about whether this feature should fund a real SerpAPI/Smithery plan
-upgrade, not something resolved by this document.
+**Correction, made before this was ever charged against in practice:** the first version of
+this gate checked `fd:earn1:user:*:balance_pence` (an `sk_fd_`-keyed EARNINGS ledger --
+money a developer earns when others use *their* agents), not the actual prepaid,
+*spendable* balance that pays for using a platform service. Confirmed directly against the
+real source: `liveCharge()`, already used for agent invocation and other platform-tool
+charges, operates on a completely separate, `fd_live_`-keyed ledger. Rebuilt to use that
+real substrate throughout -- one consequence being no second credential is needed at all;
+the CLI's existing `FD_LIVE_KEY` now covers `invoke` and both search sources.
+
+## Metering (implemented)
+
+Each successful search charges the account: an atomic, idempotent Lua-script decrement
+(`liveCharge`, confirmed live via a real, temporary diagnostic route before being relied
+on -- Upstash's client genuinely supports `EVAL`), applied only *after* a real, successful
+external result -- never on a failed external call. If the atomic charge still fails even
+though an earlier, non-atomic balance check passed (a genuinely rare race: balance moved in
+the real-world seconds a slow external call takes), the output is withheld and a 402
+returned -- external cost already sunk, but never given away for free, matching an existing
+precedent already in this exact backend file rather than inventing a new tradeoff.
+
+Revenue is routed through the existing, audited `recordRealRevenue('platform_tool', ...)`
+pipeline -- the same category other platform-tool charges already use -- rather than a new,
+parallel revenue stream that wouldn't show up in the same dashboards.
+
+The real per-search price (`SEARCH_PRICE_PENCE` in the backend) is currently a visible,
+explicit 1p placeholder. That number is a genuine business decision, not something decided
+by this document or invented unilaterally -- adjust it before relying on real revenue
+figures from this feature.
 

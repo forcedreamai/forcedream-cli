@@ -21,13 +21,13 @@ type PaidSourceStatus struct {
 	Message   string
 }
 
-// fdAccountKey reads the real ForceDream account key (sk_fd_... format) used for these two
-// gated sources specifically. Deliberately a separate variable from FD_LIVE_KEY, which is a
-// different credential used for agent invocation -- confirmed directly against the real
-// backend (_get_user_from_key requires the sk_fd_ prefix; FD_LIVE_KEY does not use that
-// helper or that prefix at all).
-func fdAccountKey() string {
-	return os.Getenv("FD_ACCOUNT_KEY")
+// fdLiveKey reads the same fd_live_... billing key the CLI already uses for invoke.
+// Earlier version of this file used a separate FD_ACCOUNT_KEY (sk_fd_... format), matching
+// what was then an incorrectly-keyed backend gate against the EARNINGS ledger; the backend
+// now correctly gates against the real, established fd_live_ billing substrate (the same
+// one invoke already uses), so this reuses the same credential -- no second key needed.
+func fdLiveKeyForSearch() string {
+	return os.Getenv("FD_LIVE_KEY")
 }
 
 type smitheryProxyResponse struct {
@@ -53,9 +53,9 @@ type proxyErrorResponse struct {
 // entitlement; returns a PaidSourceStatus explaining exactly why, rather than a generic
 // failure, whenever the gate rejects the request.
 func SearchSmithery(ctx context.Context, query string) ([]Result, PaidSourceStatus, error) {
-	key := fdAccountKey()
+	key := fdLiveKeyForSearch()
 	if key == "" {
-		return nil, PaidSourceStatus{Available: false, Reason: "auth_required", Message: "Set FD_ACCOUNT_KEY (a real sk_fd_... ForceDream account key) to use Smithery search."}, nil
+		return nil, PaidSourceStatus{Available: false, Reason: "auth_required", Message: "Set FD_LIVE_KEY (a real fd_live_... ForceDream billing key) to use Smithery search."}, nil
 	}
 
 	apiURL := "https://api.forcedream.ai/v1/search/smithery-proxy?q=" + url.QueryEscape(query) + "&pageSize=10"
