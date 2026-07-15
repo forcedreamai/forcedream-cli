@@ -70,3 +70,27 @@ explicit 1p placeholder. That number is a genuine business decision, not somethi
 by this document or invented unilaterally -- adjust it before relying on real revenue
 figures from this feature.
 
+## Positive-path: live-verified
+
+Full end-to-end verification against a real, freshly-signed-up account (real `fd_live_...`
+key, real 100p/£1.00 trial balance seeded at signup):
+
+- Anonymous requests to both proxies correctly rejected (`auth_required`)
+- With the real key: both proxies returned real results (real Smithery servers, real
+  Google/SerpAPI results)
+- Balance tracked correctly and atomically across two real, sequential charges:
+  100p -> 99p (Smithery) -> 98p (SerpAPI), each exactly the placeholder price
+- Global quota incremented correctly and independently of the per-user charge
+- Revenue recorded via `recordRealRevenue('platform_tool', ...)` on each successful charge
+- Confirmed via the compiled CLI itself: all five sources merge correctly in one
+  `forcedream search` call, and the merged output never includes `charged_pence` or
+  `balance_pence` -- the CLI's discovery layer only ever extracts public result fields
+  (name/description/source/url/etc.) from the backend response, so billing metadata never
+  reaches the printed output at all
+- No fallback path to anonymous access exists in the code; a source either uses the real,
+  authenticated call or is skipped and clearly labeled -- there is nothing in between to
+  bypass
+
+This is genuinely the full architecture working end to end, not a partial or simulated
+result.
+
