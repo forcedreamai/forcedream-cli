@@ -75,6 +75,16 @@ func normalizeURL(u string) string {
 // is mechanically identifiable -- GitHub's github.com/{org}/{repo} path, or an npm-style
 // scoped package name "@{org}/{package}". Returns "" (no signal) rather than guessing when
 // neither pattern applies -- an absent org must never be treated as a matching one.
+// ExtractOrganization pulls a real organization/namespace out of a URL or name where one
+// is mechanically identifiable -- GitHub's github.com/{org}/{repo} path, or an npm-style
+// scoped package name "@{org}/{package}". Returns "" (no signal) rather than guessing when
+// neither pattern applies -- an absent org must never be treated as a matching one.
+// Exported so other subsystems (like the confidence engine) can re-check each individual
+// source's own organization signal, not just read the entity's already-chosen one.
+func ExtractOrganization(name, rawURL string) string {
+	return extractOrganization(name, rawURL)
+}
+
 func extractOrganization(name, rawURL string) string {
 	if strings.HasPrefix(name, "@") {
 		if slash := strings.Index(name, "/"); slash > 1 {

@@ -119,6 +119,16 @@ func (g *Graph) EdgesTo(nodeID string) []Edge {
 	return out
 }
 
+// SetStoragePathForTesting redirects this package's storage to a specific path and clears
+// the in-memory cache -- exported specifically so other packages' tests (e.g. reputation)
+// can safely isolate graph.Load()/Merge() from the real, shared graph.json, the same way
+// this package's own tests already do internally. Not for use outside tests: pass "" to
+// restore the real, default path.
+func SetStoragePathForTesting(path string) {
+	graphFilePathOverride = path
+	graphCache = nil
+}
+
 // --- Local, persistent storage -- its own file (graph.json), separate from every other
 // subsystem's storage, same established pattern.
 

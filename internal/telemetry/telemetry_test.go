@@ -81,6 +81,36 @@ func TestEventScheduleHasNoFreeformField(t *testing.T) {
 	// potentially sensitive) data to a telemetry event. This test would fail to compile --
 	// not fail at runtime -- if that guarantee were ever broken, which is a stronger,
 	// earlier check than any runtime assertion could give.
-	_ = Event{Kind: "x", Success: true, DurationMs: 1, CLIVersion: "v", SourcesUsed: nil, Detail: nil}
+	_ = Event{Kind: "x", Success: true, DurationMs: 1, CLIVersion: "v", SourcesUsed: nil, SearchTermHash: "", Detail: nil}
 	_ = EventDetail{ResultCountsBySource: nil, ErrorKind: ""}
+}
+
+func TestHashSearchTermIsOneWayAndDeterministic(t *testing.T) {
+	a := HashSearchTerm("translation")
+	b := HashSearchTerm("translation")
+	if a != b {
+		t.Fatalf("expected the same real term to always hash identically, got %q vs %q", a, b)
+	}
+	if a == "translation" {
+		t.Fatal("expected a real hash, not the raw term echoed back")
+	}
+	if len(a) != 64 { // sha256 hex-encoded
+		t.Fatalf("expected a 64-character hex sha256 hash, got length %d", len(a))
+	}
+}
+
+func TestHashSearchTermNormalizesTrivialVariation(t *testing.T) {
+	a := HashSearchTerm("Translation")
+	b := HashSearchTerm(" translation ")
+	if a != b {
+		t.Fatal("expected case and whitespace variation of the same real search to hash identically")
+	}
+}
+
+func TestHashSearchTermDiffersForDifferentTerms(t *testing.T) {
+	a := HashSearchTerm("translation")
+	b := HashSearchTerm("ocr extraction")
+	if a == b {
+		t.Fatal("expected genuinely different search terms to hash differently")
+	}
 }

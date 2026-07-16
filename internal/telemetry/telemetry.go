@@ -7,9 +7,11 @@ package telemetry
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -31,10 +33,26 @@ type Event struct {
 	// fixed source names ("ForceDream", "GitHub", "MCP Registry", "Smithery", "Web") --
 	// never the search query text itself.
 	SourcesUsed []string `json:"sources_used,omitempty"`
+	// SearchTermHash is a real, one-way SHA-256 hash of the normalized search term --
+	// never the raw, readable text. Lets the backend detect "this same term was searched
+	// again" (real repeat-usage / "most searched" aggregate analytics) without the
+	// possibility of ever capturing personal or sensitive search content -- the same
+	// privacy guarantee this package has always made, extended to a new, real signal
+	// rather than relaxed for it.
+	SearchTermHash string `json:"search_term_hash,omitempty"`
 	// Detail is only populated when the user has opted into detailed telemetry (see
 	// Level below) -- even then, it's a fixed struct, not a free-form map, so there is no
 	// way for a future call site to accidentally attach something sensitive to it.
 	Detail *EventDetail `json:"detail,omitempty"`
+}
+
+// HashSearchTerm produces the real, one-way, irreversible hash a search event uses --
+// normalized (lowercased, trimmed) first, so trivial variation ("Translation" vs
+// "translation ") doesn't fragment the same real search into different hash buckets.
+func HashSearchTerm(term string) string {
+	normalized := strings.ToLower(strings.TrimSpace(term))
+	h := sha256.Sum256([]byte(normalized))
+	return hex.EncodeToString(h[:])
 }
 
 // EventDetail is the "opt-in detailed telemetry" tier -- still no task content or

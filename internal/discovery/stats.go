@@ -118,6 +118,14 @@ func getStats(source string) (connectorStats, bool) {
 	return *s, true
 }
 
+// ReliabilityForSource returns the real, locally-observed reliability for a named source
+// (e.g. "npm", "GitHub") -- exported so other subsystems (like the confidence engine) can
+// query a connector's real reliability by name without needing to construct or hold a live
+// Connector instance themselves.
+func ReliabilityForSource(source string) ReliabilityInfo {
+	return reliabilityInfoFor(source)
+}
+
 // latencyInfoFor and reliabilityInfoFor are the shared implementations every connector's
 // Latency()/Reliability() method delegates to, keyed by its own Name() -- kept in one
 // place rather than reimplemented identically on every connector struct.

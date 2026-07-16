@@ -130,13 +130,16 @@ func cmdSearch(ctx context.Context, args []string) {
 	}
 
 	// Real telemetry event -- anonymous by default (kind/success/duration/version/which
-	// fixed, known source names succeeded), never the query text itself.
+	// fixed, known source names succeeded), never the query text itself. SearchTermHash
+	// is a real, one-way hash (never the raw term) enabling real repeat-usage/"most
+	// searched" aggregate analytics without ever capturing readable search content.
 	telemetryBatch.Add(telemetry.Event{
-		Kind:        "search",
-		Success:     true,
-		DurationMs:  telemetry.ElapsedMs(telemetryStart),
-		CLIVersion:  "v0.3.0",
-		SourcesUsed: sourcesQueried,
+		Kind:           "search",
+		Success:        true,
+		DurationMs:     telemetry.ElapsedMs(telemetryStart),
+		CLIVersion:     "v0.3.0",
+		SourcesUsed:    sourcesQueried,
+		SearchTermHash: telemetry.HashSearchTerm(query),
 	})
 	telemetryBatch.Flush("https://api.forcedream.ai")
 
@@ -151,6 +154,9 @@ func cmdSearch(ctx context.Context, args []string) {
 }
 
 func cmdInvoke(ctx context.Context, args []string) {
+	telemetryStart := telemetry.StartTimer()
+	telemetryBatch := telemetry.NewBatch()
+
 	if len(args) < 2 {
 		fmt.Println("Usage: forcedream invoke <agent_slug> <task>")
 		os.Exit(1)
@@ -162,6 +168,18 @@ func cmdInvoke(ctx context.Context, args []string) {
 	}
 	client := forcedream.New(apiKey)
 	result, err := client.Invoke(ctx, args[0], args[1], 60)
+
+	// Real telemetry for invoke -- this command previously emitted none at all. Same
+	// privacy guarantee as search: no task content, no agent slug (only a fixed
+	// kind/success/duration), nothing that could echo back what was actually invoked.
+	telemetryBatch.Add(telemetry.Event{
+		Kind:       "invoke",
+		Success:    err == nil,
+		DurationMs: telemetry.ElapsedMs(telemetryStart),
+		CLIVersion: "v0.3.0",
+	})
+	telemetryBatch.Flush("https://api.forcedream.ai")
+
 	if err != nil {
 		fmt.Println("Error:", err)
 		os.Exit(1)
@@ -171,12 +189,26 @@ func cmdInvoke(ctx context.Context, args []string) {
 }
 
 func cmdVerify(ctx context.Context, args []string) {
+	telemetryStart := telemetry.StartTimer()
+	telemetryBatch := telemetry.NewBatch()
+
 	if len(args) < 1 {
 		fmt.Println("Usage: forcedream verify <task_id>")
 		os.Exit(1)
 	}
 	client := forcedream.New("")
 	result, err := client.Verify(ctx, args[0], nil)
+
+	// Real telemetry for verify -- same pattern, previously emitted none at all. No task
+	// ID, no proof content, only the fixed kind/success/duration.
+	telemetryBatch.Add(telemetry.Event{
+		Kind:       "verify",
+		Success:    err == nil,
+		DurationMs: telemetry.ElapsedMs(telemetryStart),
+		CLIVersion: "v0.3.0",
+	})
+	telemetryBatch.Flush("https://api.forcedream.ai")
+
 	if err != nil {
 		fmt.Println("Error:", err)
 		os.Exit(1)
