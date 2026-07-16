@@ -38,7 +38,17 @@ func isForceDream(r discovery.Result) bool {
 // and any future caller wanting to explain/debug a ranking, can call it directly on one
 // result without needing a full list.
 func Score(r discovery.Result, w Weights, now time.Time) float64 {
-	return popularityScore(r, w) + recencyScore(r, w, now) + mcpNativeScore(r, w)
+	return popularityScore(r, w) + recencyScore(r, w, now) + mcpNativeScore(r, w) + verificationScore(r, w)
+}
+
+// verificationScore rewards real cryptographic verification (discovery.Result.Verified) --
+// data that already existed on every result but was never actually incorporated into v2's
+// original scoring. A genuine gap being closed, not a new signal invented for this pass.
+func verificationScore(r discovery.Result, w Weights) float64 {
+	if r.Verified {
+		return w.VerificationBonus
+	}
+	return 0
 }
 
 // popularityScore log-normalizes stars/useCount separately (raw counts span 0 to tens of

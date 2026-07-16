@@ -22,7 +22,9 @@ func (f fakeConnector) Search(ctx context.Context, query string, limit int) (Out
 func (f fakeConnector) Health(ctx context.Context) HealthStatus {
 	return HealthStatus{Healthy: f.err == nil}
 }
-func (f fakeConnector) Capabilities() Capabilities { return Capabilities{} }
+func (f fakeConnector) Latency() LatencyInfo             { return LatencyInfo{} }
+func (f fakeConnector) Reliability() ReliabilityInfo     { return ReliabilityInfo{} }
+func (f fakeConnector) Capabilities() Capabilities       { return Capabilities{} }
 
 var _ Connector = fakeConnector{}
 

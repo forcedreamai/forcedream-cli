@@ -25,12 +25,39 @@ type Connector interface {
 	// Health performs a real, lightweight reachability check -- not a full search, and
 	// critically, never a paid one (a health check must never spend real money). Lets a
 	// future status command report which sources are currently up without the cost of a
-	// full query.
+	// full query. This is a live, active probe -- distinct from Latency()/Reliability()
+	// below, which report historical trend instead.
 	Health(ctx context.Context) HealthStatus
+
+	// Latency reports this connector's real, locally-observed average response time,
+	// accumulated from actual past searches -- not a static or guessed number, since
+	// latency isn't a fact about a connector in the abstract, only something measurable
+	// after real calls have happened. HasData is false (and AverageMs meaningless) until
+	// this connector has actually been searched at least once on this machine.
+	Latency() LatencyInfo
+
+	// Reliability reports this connector's real, locally-observed success rate,
+	// accumulated the same way. Same honesty rule: HasData is false until real attempts
+	// exist to compute a rate from.
+	Reliability() ReliabilityInfo
 
 	// Capabilities describes this source's real, fixed properties -- known in advance, not
 	// detected per-call, since they don't change between invocations.
 	Capabilities() Capabilities
+}
+
+// LatencyInfo is Latency()'s real result: either a genuine, measured average, or an
+// honest "nothing observed yet" -- never a fabricated default standing in for real data.
+type LatencyInfo struct {
+	HasData   bool
+	AverageMs int64
+}
+
+// ReliabilityInfo is Reliability()'s real result, same honesty rule as LatencyInfo.
+type ReliabilityInfo struct {
+	HasData     bool
+	SuccessRate float64 // 0.0-1.0
+	Attempts    int
 }
 
 // Outcome is Search's real result: either real data, or a real, structured reason it
@@ -50,6 +77,7 @@ type Capabilities struct {
 	RequiresPayment    bool // true for Smithery/SerpAPI -- needs a real FD_LIVE_KEY, spends a real balance
 	RequiresAPIKey     bool // true if this source needs its own, non-ForceDream credential (e.g. GITHUB_TOKEN, optional but real when present)
 	RateLimitPerMinute int  // 0 = effectively unbounded/unknown; a real, known number where the source documents one (e.g. GitHub's unauthenticated 10/min)
+	SupportsRealtime   bool // true if this source's data reflects the live, current state of the underlying registry (all of ForceDream/MCP Registry/GitHub/npm/Smithery/Web genuinely do -- none of them serve a stale, batch-crawled snapshot); false would mean a source backed by a periodic, non-live crawl
 }
 
 // HealthStatus is a real, current reachability result -- not a cached or assumed value.

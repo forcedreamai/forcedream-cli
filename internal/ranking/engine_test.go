@@ -93,3 +93,14 @@ func TestUnknownSourceDefaultsToNeutralWeight(t *testing.T) {
 		t.Fatalf("expected neutral 1.0 weight for an unconfigured source, got %f", got)
 	}
 }
+
+func TestVerifiedResultScoresHigherThanUnverified(t *testing.T) {
+	w := DefaultWeights()
+	now := time.Now()
+	stars := intPtr(100)
+	verified := discovery.Result{Source: "GitHub", Stars: stars, Verified: true}
+	unverified := discovery.Result{Source: "GitHub", Stars: stars, Verified: false}
+	if Score(verified, w, now) <= Score(unverified, w, now) {
+		t.Fatalf("expected a verified result to outscore an otherwise-identical unverified one: verified=%f unverified=%f", Score(verified, w, now), Score(unverified, w, now))
+	}
+}

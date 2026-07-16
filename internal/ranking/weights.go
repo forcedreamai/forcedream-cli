@@ -43,6 +43,12 @@ type Weights struct {
 	// a real "mcp-server" or "mcp" tag, recognizing genuine MCP-native metadata even when
 	// the result didn't come from the formal registry itself.
 	MCPTagBonus float64
+
+	// VerificationBonus is a flat bonus for results with real cryptographic verification
+	// (discovery.Result.Verified) -- real, already-existing data on every ForceDream
+	// result that v2's original scoring never actually used. Not a new signal invented
+	// for this framework, just a genuine gap being closed.
+	VerificationBonus float64
 }
 
 // DefaultWeights returns the real, shipped defaults. ForceDream's own always-first rule
@@ -60,6 +66,7 @@ func DefaultWeights() Weights {
 		RecencyHalfLifeDays: 180,
 		MCPNativeBonus:      25,
 		MCPTagBonus:         8,
+		VerificationBonus:   15,
 	}
 }
 
