@@ -67,6 +67,12 @@ type Outcome struct {
 	Available bool
 	Reason    string // fixed, machine-readable reason code: "auth_required", "rate_limited", "not_configured", "quota_exceeded", or "" when Available is true
 	Message   string // real, human-readable explanation shown to the person running the CLI
+	// Stale is true only when this Outcome came from adaptive scheduling's skip-and-
+	// fallback path (the connector was judged currently unhealthy, so the real call was
+	// skipped and a possibly-expired cached result was used instead) -- lets a caller
+	// honestly label this as not-necessarily-fresh, rather than presenting it
+	// indistinguishably from a real, live result.
+	Stale bool
 }
 
 // Capabilities are this connector's fixed, known-in-advance properties -- the "capabilities()"

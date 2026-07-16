@@ -101,6 +101,22 @@ func getCached(source, query string, limit int) ([]Result, bool) {
 	return entry.Results, true
 }
 
+// getCachedIgnoringExpiry is used only by adaptive scheduling's skip-and-fallback path: a
+// connector judged currently unhealthy skips a real call entirely, and a stale-but-present
+// cached result is honestly better than nothing for a source likely to fail anyway. Never
+// used by a connector's own normal Search() path -- that always respects the real TTL via
+// getCached above.
+func getCachedIgnoringExpiry(source, query string, limit int) ([]Result, bool) {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+	cf := loadCache()
+	entry, ok := cf.Entries[cacheKey(source, query, limit)]
+	if !ok {
+		return nil, false
+	}
+	return entry.Results, true
+}
+
 // setCached stores a real, just-fetched result set for this exact source+query+limit.
 func setCached(source, query string, limit int, results []Result) {
 	cacheMu.Lock()

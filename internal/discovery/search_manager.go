@@ -29,6 +29,13 @@ type ManagedResult struct {
 // SearchAll queries every registered connector in parallel and returns once all have
 // completed -- the same real concurrency the hand-written version had, now generic over
 // however many connectors are registered rather than a fixed, hand-counted set.
+//
+// Adaptive scheduling: before attempting a real call, each connector's own, locally-
+// observed reliability is checked (shouldSkipConnector, no extra network call). A
+// connector judged currently unhealthy has its real Search() call skipped entirely,
+// falling back to a stale-OK cache lookup if one exists (Outcome.Stale marks this
+// honestly) -- faster and cheaper than waiting on a call likely to fail, without
+// permanently giving up on a source that may recover (see forceRetryAfter).
 func (m *SearchManager) SearchAll(ctx context.Context, query string, limit int) []ManagedResult {
 	var wg sync.WaitGroup
 	resultsCh := make(chan ManagedResult, len(m.connectors))
@@ -37,6 +44,16 @@ func (m *SearchManager) SearchAll(ctx context.Context, query string, limit int) 
 		wg.Add(1)
 		go func(conn Connector) {
 			defer wg.Done()
+
+			if shouldSkipConnector(conn.Name()) {
+				if cached, ok := getCachedIgnoringExpiry(conn.Name(), query, limit); ok {
+					resultsCh <- ManagedResult{Name: conn.Name(), Outcome: Outcome{Results: cached, Available: true, Stale: true}}
+					return
+				}
+				// Unhealthy and nothing cached to fall back to -- still worth a real
+				// attempt rather than reporting nothing at all.
+			}
+
 			outcome, err := conn.Search(ctx, query, limit)
 			resultsCh <- ManagedResult{Name: conn.Name(), Outcome: outcome, Err: err}
 		}(c)
