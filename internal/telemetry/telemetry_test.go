@@ -81,7 +81,7 @@ func TestEventScheduleHasNoFreeformField(t *testing.T) {
 	// potentially sensitive) data to a telemetry event. This test would fail to compile --
 	// not fail at runtime -- if that guarantee were ever broken, which is a stronger,
 	// earlier check than any runtime assertion could give.
-	_ = Event{Kind: "x", Success: true, DurationMs: 1, CLIVersion: "v", SourcesUsed: nil, SearchTermHash: "", Detail: nil}
+	_ = Event{Kind: "x", Success: true, DurationMs: 1, CLIVersion: "v", SourcesUsed: nil, SearchTermHash: "", AgentSlug: "", Detail: nil}
 	_ = EventDetail{ResultCountsBySource: nil, ErrorKind: ""}
 }
 

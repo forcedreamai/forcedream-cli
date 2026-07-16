@@ -169,14 +169,16 @@ func cmdInvoke(ctx context.Context, args []string) {
 	client := forcedream.New(apiKey)
 	result, err := client.Invoke(ctx, args[0], args[1], 60)
 
-	// Real telemetry for invoke -- this command previously emitted none at all. Same
-	// privacy guarantee as search: no task content, no agent slug (only a fixed
-	// kind/success/duration), nothing that could echo back what was actually invoked.
+	// Real telemetry for invoke -- this command previously emitted none at all. AgentSlug
+	// is the real, public marketplace identifier being invoked (safe -- a product
+	// identifier, not personal data); task content and everything else about what was
+	// actually asked of the agent is still never captured.
 	telemetryBatch.Add(telemetry.Event{
 		Kind:       "invoke",
 		Success:    err == nil,
 		DurationMs: telemetry.ElapsedMs(telemetryStart),
 		CLIVersion: "v0.3.0",
+		AgentSlug:  args[0],
 	})
 	telemetryBatch.Flush("https://api.forcedream.ai")
 

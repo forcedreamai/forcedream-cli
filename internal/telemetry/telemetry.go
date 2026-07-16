@@ -40,6 +40,11 @@ type Event struct {
 	// privacy guarantee this package has always made, extended to a new, real signal
 	// rather than relaxed for it.
 	SearchTermHash string `json:"search_term_hash,omitempty"`
+	// AgentSlug is only populated for "invoke" events, and only ever the real, public
+	// marketplace identifier of the agent invoked (e.g. "translation-bridge") -- the same
+	// category of thing as "which product page was viewed", not personal data. Still
+	// never the task content itself, and still never anything the person typed.
+	AgentSlug string `json:"agent_slug,omitempty"`
 	// Detail is only populated when the user has opted into detailed telemetry (see
 	// Level below) -- even then, it's a fixed struct, not a free-form map, so there is no
 	// way for a future call site to accidentally attach something sensitive to it.
