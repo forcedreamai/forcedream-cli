@@ -9,6 +9,8 @@ import (
 
 	forcedream "github.com/forcedreamai/forcedream-sdk-go"
 	"github.com/forcedreamai/forcedream-cli/internal/discovery"
+	"github.com/forcedreamai/forcedream-cli/internal/entity"
+	"github.com/forcedreamai/forcedream-cli/internal/graph"
 	"github.com/forcedreamai/forcedream-cli/internal/ranking"
 	"github.com/forcedreamai/forcedream-cli/internal/telemetry"
 )
@@ -117,6 +119,15 @@ func cmdSearch(ctx context.Context, args []string) {
 	// engine/weights/tests/version) does the actual ranking. Neither package depends on
 	// the other beyond ranking's one-way use of discovery.Result as the shared data type.
 	merged := ranking.Rank(discovery.Merge(all), ranking.DefaultWeights())
+
+	// Entity resolution + the local knowledge graph run as an additional, side step on
+	// the same raw results -- deliberately not woven into the merge/rank pipeline above,
+	// so this brand-new subsystem can't put the already-proven search output at risk.
+	// Real, persisted decisions accumulate on this machine across searches; genuine
+	// failures here are non-fatal to the actual search the person asked for.
+	if resolved := entity.ResolveWithOverrides(all, entity.DefaultMergeThreshold); len(resolved) > 0 {
+		graph.Merge(graph.BuildFromEntities(resolved))
+	}
 
 	// Real telemetry event -- anonymous by default (kind/success/duration/version/which
 	// fixed, known source names succeeded), never the query text itself.
