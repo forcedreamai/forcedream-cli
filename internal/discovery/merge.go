@@ -1,18 +1,12 @@
 package discovery
 
-import "sort"
-
-// MergeAndRank deduplicates results referring to the same real thing across sources
-// (keeping the entry with the most complete data), then ranks by a real, defensible
-// composite score built only from confirmed-real signals -- never an invented metric.
-//
-// Ranking signal, in priority order:
-//  1. ForceDream results first (cryptographically verified, the platform's own primary
-//     source).
-//  2. Everything else ordered by a normalized popularity score combining real GitHub stars
-//     and real Smithery useCount where present. No "weekly velocity" or similar invented
-//     figure -- no real source here exposes that.
-func MergeAndRank(results []Result) []Result {
+// Merge deduplicates results referring to the same real thing across sources (keeping the
+// entry with the most complete data). Ranking is a deliberately separate concern, now owned
+// entirely by the standalone internal/ranking package (see that package's own docs) --
+// this function no longer sorts by score at all, matching the architectural-independence
+// requirement that ranking not be embedded inside discovery's own merge step. Callers
+// dedupe here, then rank separately: ranking.Rank(discovery.Merge(results), weights).
+func Merge(results []Result) []Result {
 	bySlug := map[string]*Result{}
 	var order []string
 
@@ -34,10 +28,6 @@ func MergeAndRank(results []Result) []Result {
 	for _, key := range order {
 		merged = append(merged, *bySlug[key])
 	}
-
-	sort.SliceStable(merged, func(i, j int) bool {
-		return score(merged[i]) > score(merged[j])
-	})
 
 	return merged
 }
@@ -64,18 +54,4 @@ func mergeInto(kept *Result, dup *Result) {
 		kept.Tags = dup.Tags
 	}
 	kept.Source = kept.Source + " + " + dup.Source
-}
-
-func score(r Result) float64 {
-	if r.Source == "ForceDream" || (len(r.Source) >= 10 && r.Source[:10] == "ForceDream") {
-		return 1_000_000 // ForceDream's own, cryptographically-verified agents always rank first
-	}
-	s := 0.0
-	if r.Stars != nil {
-		s += float64(*r.Stars)
-	}
-	if r.UseCount != nil {
-		s += float64(*r.UseCount)
-	}
-	return s
 }

@@ -10,6 +10,7 @@ import (
 
 	forcedream "github.com/forcedreamai/forcedream-sdk-go"
 	"github.com/forcedreamai/forcedream-cli/internal/discovery"
+	"github.com/forcedreamai/forcedream-cli/internal/ranking"
 )
 
 func main() {
@@ -165,7 +166,11 @@ func cmdSearch(ctx context.Context, args []string) {
 		all = append(all, r.results...)
 	}
 
-	merged := discovery.MergeAndRank(all)
+	// Dedupe and rank are deliberately two separate, independently-callable steps now --
+	// discovery.Merge only dedupes; internal/ranking (a standalone subsystem, its own
+	// engine/weights/tests/version) does the actual ranking. Neither package depends on
+	// the other beyond ranking's one-way use of discovery.Result as the shared data type.
+	merged := ranking.Rank(discovery.Merge(all), ranking.DefaultWeights())
 
 	fmt.Fprintln(os.Stderr, "Sources queried:")
 	for _, s := range sourceStatus {
