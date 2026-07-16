@@ -11,6 +11,7 @@ import (
 	forcedream "github.com/forcedreamai/forcedream-sdk-go"
 	"github.com/forcedreamai/forcedream-cli/internal/discovery"
 	"github.com/forcedreamai/forcedream-cli/internal/ranking"
+	"github.com/forcedreamai/forcedream-cli/internal/telemetry"
 )
 
 func main() {
@@ -51,6 +52,9 @@ Environment:
 }
 
 func cmdSearch(ctx context.Context, args []string) {
+	telemetryStart := telemetry.StartTimer()
+	telemetryBatch := telemetry.NewBatch()
+
 	query := ""
 	if len(args) > 0 {
 		query = args[0]
@@ -128,12 +132,18 @@ func cmdSearch(ctx context.Context, args []string) {
 
 	var all []discovery.Result
 	var sourceStatus []string
+	// sourcesQueried holds only fixed, known source names (never user input) for the
+	// telemetry event below -- built directly here, at the one real point each source's
+	// real outcome is known, rather than parsed back out of the human-readable
+	// sourceStatus strings.
+	var sourcesQueried []string
 	for r := range resultsCh {
 		if r.err != nil {
 			sourceStatus = append(sourceStatus, fmt.Sprintf("%s: unavailable (%v)", r.name, r.err))
 			continue
 		}
 		sourceStatus = append(sourceStatus, fmt.Sprintf("%s: %d results", r.name, len(r.results)))
+		sourcesQueried = append(sourcesQueried, r.name)
 		all = append(all, r.results...)
 	}
 
@@ -163,6 +173,7 @@ func cmdSearch(ctx context.Context, args []string) {
 			continue
 		}
 		sourceStatus = append(sourceStatus, fmt.Sprintf("%s: %d results", r.name, len(r.results)))
+		sourcesQueried = append(sourcesQueried, r.name)
 		all = append(all, r.results...)
 	}
 
@@ -171,6 +182,17 @@ func cmdSearch(ctx context.Context, args []string) {
 	// engine/weights/tests/version) does the actual ranking. Neither package depends on
 	// the other beyond ranking's one-way use of discovery.Result as the shared data type.
 	merged := ranking.Rank(discovery.Merge(all), ranking.DefaultWeights())
+
+	// Real telemetry event -- anonymous by default (kind/success/duration/version/which
+	// fixed, known source names succeeded), never the query text itself.
+	telemetryBatch.Add(telemetry.Event{
+		Kind:        "search",
+		Success:     true,
+		DurationMs:  telemetry.ElapsedMs(telemetryStart),
+		CLIVersion:  "v0.3.0",
+		SourcesUsed: sourcesQueried,
+	})
+	telemetryBatch.Flush("https://api.forcedream.ai")
 
 	fmt.Fprintln(os.Stderr, "Sources queried:")
 	for _, s := range sourceStatus {
