@@ -1,49 +1,19 @@
 package discovery
 
-import (
-	"context"
-	"time"
-)
+import "context"
 
-// SmitheryConnector wraps the already-proven SearchSmithery function. Paid-source specific
-// care taken here, distinct from the free connectors: retries apply only to genuine
-// request/network failures (err != nil), never to a real gate rejection (status.Available
-// == false, e.g. "insufficient_funds") -- retrying a rejection is pointless, since the
-// account's balance won't have changed in the few hundred milliseconds between attempts.
-// Caching applies only to real, successful results for the same reason in reverse: caching
-// a rejection would mean a person who tops up their balance or sets FD_LIVE_KEY between
-// calls could still see a stale "unavailable" result. A cache hit here means a real, paid
-// call is skipped entirely -- genuinely saves the person money on a repeated identical
-// query, not just time.
+// SmitheryConnector wraps the already-proven SearchSmithery function. Retry/cache/stats
+// are centralized in instrumentedPaidSearch (instrumentation.go), which correctly never
+// retries or caches a real gate rejection (auth_required/insufficient_funds/etc) -- only
+// genuine request failures are retried, and only real successes are cached.
 type SmitheryConnector struct{}
 
 func (SmitheryConnector) Name() string { return "Smithery" }
 
 func (c SmitheryConnector) Search(ctx context.Context, query string, limit int) (Outcome, error) {
-	if cached, ok := getCached(c.Name(), query, limit); ok {
-		return Outcome{Results: cached, Available: true}, nil
-	}
-
-	start := time.Now()
-	var results []Result
-	var status PaidSourceStatus
-	err := withRetry(2, 300*time.Millisecond, func() error {
-		var e error
-		results, status, e = SearchSmithery(ctx, query)
-		return e
+	return instrumentedPaidSearch(c.Name(), query, limit, func() ([]Result, PaidSourceStatus, error) {
+		return SearchSmithery(ctx, query)
 	})
-	recordSearchOutcome(c.Name(), err == nil && status.Available, time.Since(start).Milliseconds())
-
-	if err != nil {
-		return Outcome{Available: false, Reason: "request_failed", Message: err.Error()}, err
-	}
-	if !status.Available {
-		// A real, specific reason from the backend gate -- not cached, not retried, since
-		// neither would change a real auth/balance/entitlement state.
-		return Outcome{Available: false, Reason: status.Reason, Message: status.Message}, nil
-	}
-	setCached(c.Name(), query, limit, results)
-	return Outcome{Results: results, Available: true}, nil
 }
 
 func (SmitheryConnector) Health(ctx context.Context) HealthStatus {

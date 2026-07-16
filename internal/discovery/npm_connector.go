@@ -1,34 +1,18 @@
 package discovery
 
-import (
-	"context"
-	"time"
-)
+import "context"
 
-// NpmConnector wraps the already-proven SearchNpmMCPServers function (confirmed live
-// before this framework existed) in the unified Connector interface -- the real logic is
-// not duplicated here, only adapted to the new, shared shape.
+// NpmConnector wraps the already-proven SearchNpmMCPServers function. Retry/cache/stats
+// are no longer implemented here at all -- centralized in instrumentedSearch (see
+// instrumentation.go), which every free connector now shares.
 type NpmConnector struct{}
 
 func (NpmConnector) Name() string { return "npm" }
 
 func (c NpmConnector) Search(ctx context.Context, query string, limit int) (Outcome, error) {
-	if cached, ok := getCached(c.Name(), query, limit); ok {
-		return Outcome{Results: cached, Available: true}, nil
-	}
-	start := time.Now()
-	var results []Result
-	err := withRetry(2, 300*time.Millisecond, func() error {
-		var e error
-		results, e = SearchNpmMCPServers(ctx, query, limit)
-		return e
+	return instrumentedSearch(c.Name(), query, limit, func() ([]Result, error) {
+		return SearchNpmMCPServers(ctx, query, limit)
 	})
-	recordSearchOutcome(c.Name(), err == nil, time.Since(start).Milliseconds())
-	if err != nil {
-		return Outcome{Available: false, Reason: "request_failed", Message: err.Error()}, err
-	}
-	setCached(c.Name(), query, limit, results)
-	return Outcome{Results: results, Available: true}, nil
 }
 
 func (NpmConnector) Health(ctx context.Context) HealthStatus {

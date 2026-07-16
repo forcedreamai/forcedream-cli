@@ -1,40 +1,17 @@
 package discovery
 
-import (
-	"context"
-	"time"
-)
+import "context"
 
 // WebConnector wraps the already-proven SearchWeb function (SerpAPI-backed). Same
-// paid-source care as SmitheryConnector: retries only on genuine request failures, never
-// on a real gate rejection; caching only real, successful results.
+// centralized retry/cache/stats behavior as SmitheryConnector, via instrumentedPaidSearch.
 type WebConnector struct{}
 
 func (WebConnector) Name() string { return "Web search" }
 
 func (c WebConnector) Search(ctx context.Context, query string, limit int) (Outcome, error) {
-	if cached, ok := getCached(c.Name(), query, limit); ok {
-		return Outcome{Results: cached, Available: true}, nil
-	}
-
-	start := time.Now()
-	var results []Result
-	var status PaidSourceStatus
-	err := withRetry(2, 300*time.Millisecond, func() error {
-		var e error
-		results, status, e = SearchWeb(ctx, query)
-		return e
+	return instrumentedPaidSearch(c.Name(), query, limit, func() ([]Result, PaidSourceStatus, error) {
+		return SearchWeb(ctx, query)
 	})
-	recordSearchOutcome(c.Name(), err == nil && status.Available, time.Since(start).Milliseconds())
-
-	if err != nil {
-		return Outcome{Available: false, Reason: "request_failed", Message: err.Error()}, err
-	}
-	if !status.Available {
-		return Outcome{Available: false, Reason: status.Reason, Message: status.Message}, nil
-	}
-	setCached(c.Name(), query, limit, results)
-	return Outcome{Results: results, Available: true}, nil
 }
 
 func (WebConnector) Health(ctx context.Context) HealthStatus {
