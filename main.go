@@ -126,7 +126,12 @@ func cmdSearch(ctx context.Context, args []string) {
 	// Real, persisted decisions accumulate on this machine across searches; genuine
 	// failures here are non-fatal to the actual search the person asked for.
 	if resolved := entity.ResolveWithOverrides(all, entity.DefaultMergeThreshold); len(resolved) > 0 {
-		graph.Merge(graph.BuildFromEntities(resolved))
+		built := graph.BuildFromEntities(resolved)
+		graph.Merge(built)
+		// Also contribute the same, real data to the shared, backend-hosted Knowledge
+		// Graph -- fail-safe by design, same posture as telemetry: never blocks or
+		// affects the real search the person asked for.
+		graph.ReportToBackend(built, "https://api.forcedream.ai")
 	}
 
 	// Real telemetry event -- anonymous by default (kind/success/duration/version/which
