@@ -68,7 +68,7 @@ func cmdSearch(ctx context.Context, args []string) {
 
 	// Free sources run in parallel -- no billing risk.
 	var wg sync.WaitGroup
-	resultsCh := make(chan sourceResult, 4)
+	resultsCh := make(chan sourceResult, 5)
 
 	wg.Add(1)
 	go func() {
@@ -89,6 +89,13 @@ func cmdSearch(ctx context.Context, args []string) {
 		defer wg.Done()
 		r, err := discovery.SearchGitHubMCPServers(ctx, query, 30)
 		resultsCh <- sourceResult{"GitHub", r, err}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		r, err := discovery.SearchNpmMCPServers(ctx, query, 20)
+		resultsCh <- sourceResult{"npm", r, err}
 	}()
 
 	// Paid sources: gated behind a real ForceDream account, balance, and entitlement --
