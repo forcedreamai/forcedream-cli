@@ -60,43 +60,18 @@ func cmdSearch(ctx context.Context, args []string) {
 		query = args[0]
 	}
 
-	type sourceResult struct {
-		name    string
-		results []discovery.Result
-		err     error
-	}
-
-	// Free sources run in parallel -- no billing risk.
-	var wg sync.WaitGroup
-	resultsCh := make(chan sourceResult, 5)
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		r, err := discovery.SearchForceDream(ctx, query)
-		resultsCh <- sourceResult{"ForceDream", r, err}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		r, err := discovery.SearchMCPRegistry(ctx, query, 50)
-		resultsCh <- sourceResult{"MCP Registry", r, err}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		r, err := discovery.SearchGitHubMCPServers(ctx, query, 30)
-		resultsCh <- sourceResult{"GitHub", r, err}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		r, err := discovery.SearchNpmMCPServers(ctx, query, 20)
-		resultsCh <- sourceResult{"npm", r, err}
-	}()
+	// Free sources run in parallel via the new Connector/SearchManager framework -- adding
+	// a fifth free source now means one line here, not a new hand-written goroutine block.
+	// Note: the four sources previously had different, ad-hoc per-source limits (50/30/20)
+	// with no deep reasoning behind the specific numbers; migrating to a single, shared 30
+	// here is a deliberate, minor simplification, not an accidental behavior change.
+	freeManager := discovery.NewSearchManager(
+		discovery.ForceDreamConnector{},
+		discovery.MCPRegistryConnector{},
+		discovery.GitHubConnector{},
+		discovery.NpmConnector{},
+	)
+	freeManaged := freeManager.SearchAll(ctx, query, 30)
 
 	// Paid sources: gated behind a real ForceDream account, balance, and entitlement --
 	// the CLI never touches Smithery/SerpAPI directly, only the real backend proxies,
@@ -132,11 +107,6 @@ func cmdSearch(ctx context.Context, args []string) {
 		close(paidCh)
 	}()
 
-	go func() {
-		wg.Wait()
-		close(resultsCh)
-	}()
-
 	var all []discovery.Result
 	var sourceStatus []string
 	// sourcesQueried holds only fixed, known source names (never user input) for the
@@ -144,14 +114,18 @@ func cmdSearch(ctx context.Context, args []string) {
 	// real outcome is known, rather than parsed back out of the human-readable
 	// sourceStatus strings.
 	var sourcesQueried []string
-	for r := range resultsCh {
-		if r.err != nil {
-			sourceStatus = append(sourceStatus, fmt.Sprintf("%s: unavailable (%v)", r.name, r.err))
+	for _, r := range freeManaged {
+		if r.Err != nil {
+			sourceStatus = append(sourceStatus, fmt.Sprintf("%s: unavailable (%v)", r.Name, r.Err))
 			continue
 		}
-		sourceStatus = append(sourceStatus, fmt.Sprintf("%s: %d results", r.name, len(r.results)))
-		sourcesQueried = append(sourcesQueried, r.name)
-		all = append(all, r.results...)
+		if !r.Outcome.Available {
+			sourceStatus = append(sourceStatus, fmt.Sprintf("%s: unavailable -- %s", r.Name, r.Outcome.Message))
+			continue
+		}
+		sourceStatus = append(sourceStatus, fmt.Sprintf("%s: %d results", r.Name, len(r.Outcome.Results)))
+		sourcesQueried = append(sourcesQueried, r.Name)
+		all = append(all, r.Outcome.Results...)
 	}
 
 	for r := range paidCh {
