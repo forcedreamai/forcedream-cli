@@ -73,6 +73,13 @@ func cmdSearch(ctx context.Context, args []string) {
 		discovery.NpmConnector{},
 		discovery.SmitheryConnector{},
 		discovery.WebConnector{},
+		discovery.DockerHubConnector{},
+		discovery.CratesIOConnector{},
+		discovery.MavenCentralConnector{},
+		discovery.NuGetConnector{},
+		discovery.PackagistConnector{},
+		discovery.RubyGemsConnector{},
+		discovery.HexPMConnector{},
 	)
 	managed := manager.SearchAll(ctx, query, 30)
 
