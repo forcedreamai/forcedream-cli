@@ -141,6 +141,12 @@ func (b *Batch) IsEmpty() bool {
 // data (no MAC address, no hostname, no hardware ID). Its only purpose is letting the
 // backend distinguish "10 events from 10 different installs" from "10 events from 1
 // install run 10 times" for basic aggregate counts -- not to identify a person or device.
+// CurrentInstallID exposes the real, current install ID (creating one via the same,
+// real, non-identifying mechanism installID() already uses if none exists yet) -- for
+// display purposes (e.g. the telemetry status subcommand), not for any new call site to
+// start attaching it to events in a new way.
+func CurrentInstallID() string { return installID() }
+
 func installID() string {
 	dir, err := os.UserConfigDir()
 	if err != nil {

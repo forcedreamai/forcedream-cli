@@ -31,6 +31,16 @@ func main() {
 		cmdInvoke(ctx, os.Args[2:])
 	case "verify":
 		cmdVerify(ctx, os.Args[2:])
+	case "status":
+		cmdStatus(ctx, os.Args[2:])
+	case "reputation":
+		cmdReputation(ctx, os.Args[2:])
+	case "confidence":
+		cmdConfidence(ctx, os.Args[2:])
+	case "graph":
+		cmdGraph(ctx, os.Args[2:])
+	case "telemetry":
+		cmdTelemetry(ctx, os.Args[2:])
 	default:
 		printUsage()
 		os.Exit(1)
@@ -66,21 +76,7 @@ func cmdSearch(ctx context.Context, args []string) {
 	// also what makes adaptive scheduling (skipping an unhealthy connector, falling back
 	// to a cached result) possible to build as one, uniform mechanism later, rather than
 	// two different ones for free vs. paid sources.
-	manager := discovery.NewSearchManager(
-		discovery.ForceDreamConnector{},
-		discovery.MCPRegistryConnector{},
-		discovery.GitHubConnector{},
-		discovery.NpmConnector{},
-		discovery.SmitheryConnector{},
-		discovery.WebConnector{},
-		discovery.DockerHubConnector{},
-		discovery.CratesIOConnector{},
-		discovery.MavenCentralConnector{},
-		discovery.NuGetConnector{},
-		discovery.PackagistConnector{},
-		discovery.RubyGemsConnector{},
-		discovery.HexPMConnector{},
-	)
+	manager := discovery.NewSearchManager(discovery.AllConnectors()...)
 	managed := manager.SearchAll(ctx, query, 30)
 
 	var all []discovery.Result
