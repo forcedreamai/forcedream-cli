@@ -262,6 +262,14 @@ func invocationHistory() ComponentScore {
 // overallScore averages only the components that are genuinely Available -- an
 // unavailable component is never treated as a zero. If nothing at all is available,
 // Overall is itself honestly Insufficient Data.
+// RecomputeOverall re-averages a set of components -- exported so a caller that swaps in
+// an enriched component (e.g. a real package-authenticity check) after Compute() can
+// honestly refresh Overall too, rather than displaying a stale average that still
+// excludes data that's now genuinely available.
+func RecomputeOverall(components []ComponentScore) ComponentScore {
+	return overallScore(components)
+}
+
 func overallScore(components []ComponentScore) ComponentScore {
 	var total float64
 	var n int

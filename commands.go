@@ -171,6 +171,18 @@ func cmdConfidence(ctx context.Context, args []string) {
 		e := resolved[i]
 		fmt.Printf("\n%s\n", e.CanonicalName)
 		conf := confidence.Compute(e, all)
+		// Real, separate, optional enrichment (makes real, live network calls, unlike
+		// Compute() itself) -- honestly replaces the package_authenticity component only
+		// when a real, verified-mechanism source (Maven Central, npm) is present, and
+		// recomputes Overall so it doesn't stay stale relative to what's now available.
+		if authScore := confidence.CheckPackageAuthenticity(ctx, e, all); authScore.Available {
+			for i, c := range conf.Components {
+				if c.Component == confidence.ComponentPackageAuthenticity {
+					conf.Components[i] = authScore
+				}
+			}
+			conf.Overall = confidence.RecomputeOverall(conf.Components)
+		}
 		if !conf.Overall.Available {
 			fmt.Println("  Overall: Insufficient Data")
 		} else {
